@@ -197,6 +197,11 @@ class GameSimulator:
             raise ValueError(f"Invalid player name: {player_name}")
         return self.player_info[player_name].final_role
 
+    def get_player_initial_role(self, player_name: str) -> Role:
+        if player_name not in self.players:
+            raise ValueError(f"Invalid player name: {player_name}")
+        return self.player_info[player_name].initial_role
+
     def get_player_night_observation(self, player_name: str) -> str:
         if player_name not in self.players:
             raise ValueError(f"Invalid player name: {player_name}")

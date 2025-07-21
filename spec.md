@@ -1,6 +1,6 @@
-## **One Night Ultimate Werewolf LLM \+ RL Project Specification**
+## **One Night Ultimate Werewolf LLM + RL Project Specification**
 
-### **1\. Project Overview**
+### **1. Project Overview**
 
 This document details the technical specification for developing an intelligent agent capable of playing a simplified version of One Night Ultimate Werewolf (ONUW). The core methodology involves leveraging a small Large Language Model (LLM), such as Gemma 3 or Qwen 3, trained through a combination of Supervised Fine-Tuning (SFT) and Reinforcement Learning (RL) via self-play. The project's primary objective is to enable the LLM agent to exhibit strategic communication, deception, and deduction during the game's discussion phase, with performance evaluated based on team victory.
 
@@ -61,14 +61,14 @@ A small, fixed set of core ONUW roles will be utilized. Representative roles inc
   * Players will take turns making public statements. The number of discussion rounds can be configured (e.g., a single round or multiple).  
   * **LLM Action:** During its turn, each LLM agent will generate:  
     * A **public statement** in natural language.  
-    * A **private guess** of all players' final roles, presented in a structured JSON format.  
-* **Voting Phase (LLM Actions):**  
-  * Following the discussion, each LLM agent will output its **vote** for the player it believes to be a Werewolf.  
-* **Resolution Phase:**  
+    * A **private guess** of all players' final roles, presented in a structured JSON format.
+    * A **vote** for the player it believes to be a Werewolf.
+* **Voting & Resolution Phase:**  
+  * Following the final discussion round, the Game Simulator will use the `VOTE` from each player's *final* turn output. The `PUBLIC_STATEMENT` from this final turn is discarded.
   * The Game Simulator will tally the votes.  
   * The player with the most votes will be designated as executed.  
   * ONUW win conditions will be applied based on the executed player's *final role* and the *final roles* of all players and center cards.  
-  * Rewards (+1 for team victory, \-1 for team defeat) will be assigned to each LLM agent based on its team's outcome.  
+  * Rewards (+1 for team victory, -1 for team defeat) will be assigned to each LLM agent based on its team's outcome.  
   * Auxiliary rewards for private role guesses will be computed based on their accuracy against the simulator's ground truth.
 
 ### **4\. LLM Agent Design**
@@ -76,49 +76,33 @@ A small, fixed set of core ONUW roles will be utilized. Representative roles inc
 The LLM agent will be a fine-tuned instance of a small model (Gemma 3 or Qwen 3), configured for both natural language generation and structured output.
 
 4.1. Input Prompt Structure:  
-The prompt provided to each LLM agent will encapsulate all pertinent information for its decision-making turn. Example:  
+The prompt provided to each LLM agent will encapsulate all pertinent information for its decision-making turn. The structure is consistent for every turn. Example:  
 
 ```
-\[SYSTEM\_INSTRUCTION\] You are playing One Night Ultimate Werewolf. Your objective is to secure victory for your team. Formulate strategic statements and votes. All outputs, including public statements and private role guesses, must adhere to the specified JSON format.
+[SYSTEM_INSTRUCTION] You are playing One Night Ultimate Werewolf. Your objective is to secure victory for your team. Formulate strategic statements and votes. Respond with a JSON object containing publicStatement, privateRoleGuesses, and vote fields.
 
-\[GAME\_STATE\]  
-Players: PlayerA, PlayerB, PlayerC, PlayerD  
-Possible Roles in Play: Villager, Werewolf, Seer, Troublemaker, Robber  
-Center Cards: \[Card1, Card2, Card3\] (hidden from players)
+[GAME_STATE]
+Players: PlayerA, PlayerB, PlayerC, PlayerD
+Possible Roles in Play: Villager, Werewolf, Seer, Troublemaker, Robber
+Center Cards: [Card1, Card2, Card3] (hidden from players)
 
-\[YOUR\_ROLE\] You are the Seer.  
-\[YOUR\_NIGHT\_OBSERVATIONS\] You observed PlayerB as a Werewolf.
+[YOUR_PLAYER_ID] PlayerB
 
-\[DISCUSSION\_TRANSCRIPT\]  
-PlayerA: "I am a Villager. I performed no night action."  
+[YOUR_INITIAL_ROLE] You are the Seer.
+[YOUR_NIGHT_OBSERVATIONS] You observed PlayerB as a Werewolf.
+
+[DISCUSSION_TRANSCRIPT]
+PlayerA: "I am a Villager. I performed no night action."
 PlayerC: "I am the Robber. I exchanged roles with PlayerD and am now a Villager."
-
-\[YOUR\_TURN\]  
-Formulate your public statement. Provide your private role guesses for all players (including yourself and center cards).
-
-\[OUTPUT\_FORMAT\]  
-{  
-  "PUBLIC\_STATEMENT": "...",  
-  "PRIVATE\_ROLE\_GUESSES": {  
-    "PlayerA": "...",  
-    "PlayerB": "...",  
-    "PlayerC": "...",  
-    "PlayerD": "...",  
-    "CenterCard1": "...",  
-    "CenterCard2": "...",  
-    "CenterCard3": "..."  
-  },  
-  "VOTE": "PlayerX" // Required only during the voting phase  
-}
 ```
 
 4.2. Output Format (Structured JSON):  
-The LLM will be trained to consistently produce responses in a strict JSON format. This strict adherence is critical for reliable programmatic parsing by the Game Simulator.  
+The LLM will be trained to consistently produce responses in a strict JSON format with camelCase field names. This strict adherence is critical for reliable programmatic parsing by the Game Simulator. The `vote` field is required in every turn's output.
 
 ```
 {  
-  "PUBLIC\_STATEMENT": "I am the Seer. I observed PlayerB as a Werewolf. PlayerB's statement is inconsistent with my observation.",  
-  "PRIVATE\_ROLE\_GUESSES": {  
+  "publicStatement": "I am the Seer. I observed PlayerB as a Werewolf. PlayerB's statement is inconsistent with my observation.",  
+  "privateRoleGuesses": {  
     "PlayerA": "Villager",  
     "PlayerB": "Werewolf",  
     "PlayerC": "Robber",  
@@ -127,11 +111,9 @@ The LLM will be trained to consistently produce responses in a strict JSON forma
     "CenterCard2": "Seer",  
     "CenterCard3": "Werewolf"  
   },  
-  "VOTE": "PlayerB"  
+  "vote": "PlayerB"  
 }
 ```
-
-* The VOTE field will be expected exclusively during the final turn of the discussion phase.
 
 4.3. Parameter-Efficient Fine-Tuning (PEFT) with LoRA:  
 To optimize computational resources and enable efficient training on smaller hardware, Parameter-Efficient Fine-Tuning (PEFT) using the Low-Rank Adaptation (LoRA) method will be employed.
@@ -162,8 +144,8 @@ This phase aims to provide a "warm-start" for the LLM, establishing foundational
 5.2. Data Format:  
 Each entry in the SFT dataset will comprise a (prompt, completion) pair:
 
-* **Prompt:** Comprising the \[SYSTEM\_INSTRUCTION\], \[GAME\_STATE\], \[YOUR\_ROLE\], \[YOUR\_NIGHT\_OBSERVATIONS\], and \[DISCUSSION\_TRANSCRIPT\] elements as detailed in Section 4.1.  
-* **Completion:** The desired structured JSON output, including PUBLIC\_STATEMENT, PRIVATE\_ROLE\_GUESSES, and VOTE (if applicable for the specific turn).
+* **Prompt:** Comprising the [SYSTEM_INSTRUCTION], [GAME_STATE], [YOUR_PLAYER_ID], [YOUR_ROLE], [YOUR_NIGHT_OBSERVATIONS], and [DISCUSSION_TRANSCRIPT] elements as detailed in Section 4.1.  
+* **Completion:** The desired structured JSON output with camelCase field names, including publicStatement, privateRoleGuesses, and vote.
 
 **5.3. Quantity Considerations:**
 
