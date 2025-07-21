@@ -1,0 +1,17 @@
+[project]
+name = "werewolf-llm"
+version = "0.1.0"
+description = "A project to train an LLM to play One Night Ultimate Werewolf."
+authors = [{ name = "GitHub Copilot" }]
+requires-python = ">=3.9"
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+    "ruff",
+    "mypy",
+]
+
+[tool.setuptools]
+packages = ["werewolf_llm"]
+package-dir = {"" = "src"}
