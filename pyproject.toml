@@ -2,7 +2,7 @@
 name = "werewolf-llm"
 version = "0.1.0"
 description = "A project to train an LLM to play One Night Ultimate Werewolf."
-authors = [{ name = "GitHub Copilot" }]
+authors = [{ name = "Lawrence Forman", email = "me@merklejerk.com" }]
 requires-python = ">=3.9"
 dependencies = [
     "llama-cpp-python>=0.3.14",
