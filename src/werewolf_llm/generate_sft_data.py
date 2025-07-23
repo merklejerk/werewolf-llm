@@ -67,6 +67,9 @@ class RuleBasedAgent(Agent):
             return "I am a Villager. I don't have any special information."
     
     def _villager_statement(self, game: GameSimulator) -> str:
+        if random.random() < 0.3:
+            return self._get_accusation(game)
+
         statements = [
             "I am a Villager. I have no special abilities or information.",
             "I'm just a regular Villager. I didn't do anything during the night.",
@@ -75,6 +78,9 @@ class RuleBasedAgent(Agent):
         return random.choice(statements)
     
     def _werewolf_statement(self, game: GameSimulator) -> str:
+        if random.random() < 0.4:
+            return self._get_accusation(game)
+
         # Werewolves typically lie about their role
         if self.strategy_variant == "aggressive":
             fake_claims = [
@@ -89,26 +95,29 @@ class RuleBasedAgent(Agent):
         return random.choice(fake_claims)
     
     def _seer_statement(self, game: GameSimulator, observation: str) -> str:
+        rephrased_observation = self._rephrase_observation(observation)
         if self.strategy_variant == "truthful":
-            return f"I am the Seer. {observation}"
+            return f"I am the Seer. {rephrased_observation}"
         else:
             # Sometimes Seers might be cautious about revealing information
             if random.random() < 0.8:  # 80% chance to be truthful
-                return f"I am the Seer. {observation}"
+                return f"I am the Seer. {rephrased_observation}"
             else:
                 return "I have some information that might be helpful, but I want to hear from others first."
     
     def _robber_statement(self, game: GameSimulator, observation: str) -> str:
+        rephrased_observation = self._rephrase_observation(observation)
         if "became a" in observation:
-            return f"I started as the Robber. {observation}"
+            return f"I started as the Robber. {rephrased_observation}"
         else:
             return "I am the Robber, but I didn't get to use my ability."
     
     def _troublemaker_statement(self, game: GameSimulator, observation: str) -> str:
+        rephrased_observation = self._rephrase_observation(observation)
         if self.strategy_variant == "secretive":
             return "I am the Troublemaker. I made some changes during the night."
         else:
-            return f"I am the Troublemaker. {observation}"
+            return f"I am the Troublemaker. {rephrased_observation}"
     
     def _tanner_statement(self, game: GameSimulator) -> str:
         # Tanner wants to be executed, so might act suspicious
@@ -260,6 +269,30 @@ class RuleBasedAgent(Agent):
                         break
         
         return claims
+    
+    def _get_accusation(self, game: GameSimulator) -> str:
+        """Generates an accusation against another player."""
+        other_players = [p for p in game.get_all_players() if p != self.player_name]
+        if not other_players:
+            return "I have nothing to say."
+
+        target = random.choice(other_players)
+        
+        reasons = [
+            "is acting very suspicious.",
+            "is being too quiet.",
+            "seems to be lying.",
+            "is probably a Werewolf.",
+        ]
+        reason = random.choice(reasons)
+
+        return f"I think {target} {reason}"
+    
+    def _rephrase_observation(self, observation: str) -> str:
+        """Rephrases a second-person observation into a first-person statement."""
+        if observation.startswith("You "):
+            return "I " + observation[4:]
+        return observation
 
 
 class SFTDataGenerator:
@@ -324,7 +357,9 @@ class SFTDataGenerator:
         num_rounds = random.randint(1, 2)
         
         for round_num in range(num_rounds):
-            for player in players:
+            round_players = players.copy()
+            random.shuffle(round_players)
+            for player in round_players:
                 # Generate prompt for this player's turn
                 prompt = self._generate_prompt(game, player)
                 
@@ -371,7 +406,7 @@ class SFTDataGenerator:
         # System instruction
         system_instruction = (
             "You are playing One Night Ultimate Werewolf. Your objective is to secure victory for your team. "
-            "Formulate strategic statements and votes. Respond with a JSON object containing publicStatement, privateRoleGuesses, and vote fields."
+            "Formulate strategic statements, guesses, and votes."
         )
         
         # Game state
