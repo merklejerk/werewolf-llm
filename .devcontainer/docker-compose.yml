@@ -1,0 +1,25 @@
+services:
+  llm_dev:
+    build:
+      dockerfile: Dockerfile
+      args:
+        BASE_IMAGE: "rocm/vllm:latest"
+        USER_ID: ${UID}
+    environment:
+      - HF_HOME=/home/user/.cache/huggingface
+    volumes:
+      - ../:/workspace
+      - ${HOME}/.cache/huggingface:/home/user/.cache/huggingface
+      - ${HOME}/.cache/uv:/home/user/.cache/uv
+    devices:
+      - /dev/kfd
+      - /dev/dri
+    security_opt:
+      - seccomp:unconfined
+    ipc: host
+    shm_size: 8g
+    network_mode: host
+    working_dir: /workspace
+    group_add:
+      - video
+    command: /bin/sh -c "while sleep 1000; do :; done"

@@ -4,3 +4,4 @@ data/
 .env
 **.egg-info
 checkpoints/
+.devcontainer/*.override.yml

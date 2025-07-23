@@ -1,0 +1,8 @@
+{
+    "name": "LLM-dev",
+    "dockerComposeFile": "docker-compose.yml",
+    "service": "llm_dev", 
+    "workspaceFolder": "/workspace",
+    "updateRemoteUserUID": true,
+    "remoteUser": "user"
+}
