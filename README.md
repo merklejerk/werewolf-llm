@@ -53,7 +53,7 @@ werewolf-llm/
 
 ## Development Environment
 
-This project is configured to run in a VS Code Dev Container, which provides a reproducible development environment with all necessary dependencies pre-installed, including PyTorch with ROCm support for AMD GPUs.
+This project is configured to run in a VS Code Dev Container, which provides a reproducible development environment with all necessary dependencies pre-installed, including vLLM and PyTorch with out-of-the-box ROCm support for AMD GPUs. For NVIDIA/CUDA, you should create a `.devcontainer/docker-compose.override.yml` file with the appropriate overrides.
 
 ### Prerequisites
 
