@@ -1,0 +1,23 @@
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
+
+ARG USERNAME=user
+ARG USER_UID=1337
+ARG USER_GID=$USER_UID
+
+# Install any additional system dependencies if needed (e.g., git, curl)
+RUN apt-get update && apt-get install -y --no-install-recommends jq \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN pip install uv
+
+# Create the user
+RUN groupadd --gid $USER_GID $USERNAME \
+    && useradd --uid $USER_UID --gid $USER_GID -m -s /bin/bash $USERNAME \
+    && cp /etc/skel/.bashrc /home/$USERNAME/ \
+    && cp /etc/skel/.profile /home/$USERNAME/ \
+    && chown -R $USERNAME:$USERNAME /home/$USERNAME \
+    && echo 'PS1="$(tput bold)$(tput setaf 169)\w$(tput sgr0)\$ "' >> /home/$USERNAME/.bashrc
+
+# Set the working directory
+WORKDIR /workspace

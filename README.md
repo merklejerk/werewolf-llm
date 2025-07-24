@@ -53,7 +53,16 @@ werewolf-llm/
 
 ## Development Environment
 
-This project is configured to run in a VS Code Dev Container, which provides a reproducible development environment with all necessary dependencies pre-installed, including vLLM and PyTorch with out-of-the-box ROCm support for AMD GPUs. For NVIDIA/CUDA, you should create a `.devcontainer/docker-compose.override.yml` file with the appropriate overrides.
+This project is configured to run in a VS Code Dev Container, which provides a reproducible development environment. By default, it is set up for CPU-only. To configure it for your specific GPU architecture, you'll need to edit `.devcontainer/devcontainer.json`.
+
+In `.devcontainer/devcontainer.json`, add the appropriate Docker Compose file to the `dockerComposeFile` array:
+- For **NVIDIA (CUDA)**, add `"docker-compose.cuda.yml"`.
+- For **AMD (ROCm)**, add `"docker-compose.rocm.yml"`.
+
+For example, to use CUDA, your configuration should look like this:
+```json
+"dockerComposeFile": [ "docker-compose.base.yml", "docker-compose.cuda.yml" ],
+```
 
 ### Prerequisites
 
