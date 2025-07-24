@@ -98,8 +98,8 @@ This project is configured to run in a VS Code Dev Container, which provides a r
 Generate a dataset for the supervised fine-tuning phase. The script runs multiple game simulations with rule-based agents to create high-quality prompt/completion pairs.
 
 ```bash
-# Generate 1000 games and save to ./sft_data/
-uv run generate-sft-data --num-games 1000 --output-dir ./sft_data
+# Generate 1000 games and save to ./data/sft
+uv run gen-sft --num-games 1000 ./data/sft
 ```
 
 ### 2. Train the Model
@@ -112,7 +112,7 @@ The `train` script is the main entrypoint for SFT and RL training.
 # Start training run 'my-first-run' from the gemma-2b base model
 uv run train my-first-run \
   --base "google/gemma-2b-it" \
-  --sft ./sft_data/sft_dataset.jsonl
+  --sft ./data/sft/sft_dataset.jsonl
 ```
 
 The script will create a checkpoint directory at `training/my-first-run`.
@@ -123,7 +123,7 @@ If a checkpoint for the given run name exists, the script will resume training f
 
 ```bash
 # Resume the 'my-first-run' training run
-uv run train my-first-run --sft ./sft_data/sft_dataset.jsonl
+uv run train my-first-run --sft ./data/sft/sft_dataset.jsonl
 ```
 
 ### 3. Run a Demo Game

@@ -8,7 +8,6 @@ from dataclasses import dataclass, asdict
 import sys
 import asyncio
 
-from llama_cpp import Llama
 from .game_simulator import GameSimulator, DiscussionTurn
 from .roles import Role
 from .agent import Agent, TurnOutput
@@ -298,17 +297,8 @@ class RuleBasedAgent(Agent):
 class SFTDataGenerator:
     """Main class for generating SFT training data."""
     
-    def __init__(self, model_path: Optional[str] = None):
-        self.llm = None
-
-        if model_path:
-            logger.info(f"Loading LLM from {model_path}")
-            self.llm = Llama(
-                model_path=model_path,
-                n_ctx=4096,
-                n_threads=8,
-                verbose=False
-            )
+    def __init__(self):
+        pass
     
     def generate_game_configs(self, num_games: int) -> List[Tuple[List[str], List[Role]]]:
         """Generate diverse game configurations."""
@@ -366,13 +356,6 @@ class SFTDataGenerator:
                 # Generate response using rule-based agent
                 agent = agents[player]
                 turn_output = await agent.generate_turn_output(game)
-                
-                # Optionally rephrase the public statement using LLM
-                if self.llm:
-                    original_statement = turn_output.public_statement
-                    rephrased_statement = await self._rephrase_statement(original_statement, player, game)
-                    if rephrased_statement:
-                        turn_output.public_statement = rephrased_statement
                 
                 completion_json = turn_output.to_json()
 
@@ -449,39 +432,6 @@ Center Cards: {', '.join(center_cards)} (hidden from players)"""
         
         return prompt
     
-    async def _rephrase_statement(self, original_statement: str, player: str, game: GameSimulator) -> Optional[str]:
-        """Use LLM to rephrase statements for linguistic diversity."""
-        if not self.llm:
-            return None
-        
-        final_role = game.get_player_final_role(player)
-        
-        rephrase_prompt = f"""You are helping to create training data for a Werewolf game AI. 
-Please rephrase the following statement to make it more natural and varied while preserving the exact same meaning and strategic intent.
-
-Original role: {final_role.value}
-Original statement: "{original_statement}"
-
-Rephrased statement (keep the same strategic meaning):"""
-        
-        try:
-            output = self.llm(
-                rephrase_prompt,
-                max_tokens=100,
-                temperature=0.7,
-                stop=["\n", "\""]
-            )
-            
-            # llama-cpp-python returns a dict with 'choices' key
-            if isinstance(output, dict) and 'choices' in output:
-                rephrased = output['choices'][0]['text'].strip()
-                if rephrased and len(rephrased) > 10:  # Basic quality check
-                    return rephrased
-        except Exception as e:
-            logger.warning(f"Failed to rephrase statement: {e}")
-        
-        return None
-    
     async def generate_sft_dataset(self, num_games: int) -> List[SFTDataPoint]:
         """Generate a complete SFT dataset."""
         logger.info(f"Generating SFT dataset with {num_games} games")
@@ -551,23 +501,13 @@ Rephrased statement (keep the same strategic meaning):"""
 
 async def main():
     parser = argparse.ArgumentParser(description="Generate SFT training data for Werewolf LLM")
-    parser.add_argument("-m", "--model_path", type=str, help="Path to GGUF model for rephrasing (automatically enables LLM rephrasing)")
-    parser.add_argument("-o", "--output_dir", type=str, default="./sft_data", help="Output directory for dataset")
+    parser.add_argument("output_dir", type=str, help="Output directory for dataset")
     parser.add_argument("-n", "--num_games", type=int, default=1000, help="Number of games to simulate")
     
     args = parser.parse_args()
     
-    # If model_path is provided, automatically enable LLM rephrasing
-    if args.model_path:
-        logger.info("Model path provided - automatically enabling LLM rephrasing")
-    
-    # Validate arguments
-    if args.model_path and not Path(args.model_path).exists():
-        logger.error(f"Model path does not exist: {args.model_path}")
-        sys.exit(1)
-    
     # Create generator
-    generator = SFTDataGenerator(model_path=args.model_path)
+    generator = SFTDataGenerator()
     
     try:
         # Generate dataset

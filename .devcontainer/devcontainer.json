@@ -4,5 +4,12 @@
     "service": "llm_dev", 
     "workspaceFolder": "/workspace",
     "updateRemoteUserUID": true,
-    "remoteUser": "user"
+    "remoteUser": "user",
+    "customizations": {
+        "vscode": {
+            "settings": {
+                "python.defaultInterpreterPath": "${containerWorkspaceFolder}/.venv/bin/python"
+            }
+        }
+    }
 }
