@@ -9,6 +9,9 @@ from pydantic import BaseModel
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from transformers.utils.quantization_config import BitsAndBytesConfig
 
+from .sft_trainer import SFTTrainerWrapper
+
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -77,17 +80,15 @@ def load_or_create_model(
 
 
 def run_sft(model: AutoModelForCausalLM, tokenizer: AutoTokenizer, training_run_dir: Path, sft_data_path: Path):
-    """Stub for the Supervised Fine-Tuning process."""
-    logger.info("--- Running Supervised Fine-Tuning (SFT) ---")
-    logger.info(f"Loading SFT dataset from: {sft_data_path}")
-    # TODO: Implement SFT
-    # 1. Load dataset from sft_data_path
-    # 2. Configure LoRA adapter
-    # 3. Set up SFTTrainer
-    # 4. Run training
-    # 5. Save adapter to training_run_dir
-    logger.info("SFT logic will be implemented here.")
-    logger.info(f"Model and tokenizer are loaded. Checkpoint is at {training_run_dir}")
+    """Runs the Supervised Fine-Tuning process."""
+    sft_trainer = SFTTrainerWrapper(
+        model=model,
+        tokenizer=tokenizer,
+        training_run_dir=training_run_dir,
+        sft_data_path=sft_data_path,
+    )
+    sft_trainer.train()
+
 
 
 def run_rl(model: AutoModelForCausalLM, tokenizer: AutoTokenizer, training_run_dir: Path, rl_data_path: Path):
