@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 # Define project structure paths
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 CHECKPOINTS_DIR = PROJECT_ROOT / "checkpoints"
+MAX_SEQ_LENGTH = 8192
 
 
 class TrainingManifest(BaseModel):
@@ -46,6 +47,7 @@ def load_or_create_model(
             training_run_dir,
             quantization_config=bnb_config,
             device_map="auto",
+            max_seq_length=MAX_SEQ_LENGTH,
         )
         tokenizer = AutoTokenizer.from_pretrained(training_run_dir)
     else:
@@ -63,6 +65,7 @@ def load_or_create_model(
             base_model_name,
             quantization_config=bnb_config,
             device_map="auto",
+            max_seq_length=MAX_SEQ_LENGTH,
         )
         tokenizer = AutoTokenizer.from_pretrained(base_model_name)
         tokenizer.pad_token = tokenizer.eos_token

@@ -13,8 +13,10 @@ from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
     TrainingArguments,
+    PreTrainedModel,
 )
-from trl import SFTTrainer
+from transformers.tokenization_utils_base import PreTrainedTokenizerBase
+from trl import SFTTrainer, SFTConfig
 
 from .config import Backend, get_backend
 
@@ -46,8 +48,8 @@ class SFTTrainerWrapper:
 
     def __init__(
         self,
-        model: AutoModelForCausalLM,
-        tokenizer: AutoTokenizer,
+        model: PreTrainedModel,
+        tokenizer: PreTrainedTokenizerBase,
         training_run_dir: Path,
         sft_data_path: Path,
     ):
@@ -89,7 +91,7 @@ class SFTTrainerWrapper:
         per_device_train_batch_size = 1 if backend == Backend.CPU else 4
         gradient_accumulation_steps = 4 if backend == Backend.CPU else 1
 
-        training_args = TrainingArguments(
+        training_args = SFTConfig(
             output_dir=str(self.output_dir),
             num_train_epochs=3,
             per_device_train_batch_size=per_device_train_batch_size,
@@ -99,18 +101,17 @@ class SFTTrainerWrapper:
             save_strategy="epoch",
             optim="paged_adamw_8bit" if backend == Backend.CUDA else "adamw_torch",
             fp16=backend == Backend.CUDA,  # Enable fp16 only for CUDA
+            packing=True,
         )
 
         logger.info("Initializing SFTTrainer...")
         trainer = SFTTrainer(
             model=self.model,
-            tokenizer=self.tokenizer,
             args=training_args,
             peft_config=lora_config,
             train_dataset=dataset,
             formatting_func=self._format_dataset_entry,
-            max_seq_length=2048,
-            packing=True,
+            processing_class=self.tokenizer,
         )
 
         # 4. Run training
