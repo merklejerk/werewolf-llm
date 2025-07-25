@@ -30,7 +30,7 @@ graph TD
     B --> C[SFT Dataset];
     C --> D[SFT Trainer];
     D --> E[SFT-Tuned LLM Policy];
-    E -- Self-Play Episodes --> F[RL Trainer (PPO)];
+    E -- Self-Play Episodes --> F["RL Trainer (PPO)"];
     F --> E;
 ```
 
