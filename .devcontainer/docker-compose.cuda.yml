@@ -1,8 +1,13 @@
 services:
   llm_dev:
+    extends:
+      file: docker-compose.cpu.yml
+      service: llm_dev
     build:
       args:
         BASE_IMAGE: "vllm/vllm-openai:latest"
+    environment:
+      - BACKEND=cuda
     devices:
       - /dev/kfd
       - /dev/dri

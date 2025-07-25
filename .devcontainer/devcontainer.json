@@ -1,10 +1,11 @@
 {
     "name": "LLM-dev",
-    "dockerComposeFile": [ "docker-compose.base.yml" ],
+    "dockerComposeFile": [ ".docker-compose.yml" ],
     "service": "llm_dev", 
     "workspaceFolder": "/workspace",
     "updateRemoteUserUID": true,
     "remoteUser": "user",
+    "initializeCommand": [ "/bin/sh", "-c", "cd .devcontainer && ([ -f .env ] && . .env; ln -srf \"docker-compose.${BACKEND:-cpu}.yml\" \".docker-compose.yml\")" ],
     "customizations": {
         "vscode": {
             "settings": {

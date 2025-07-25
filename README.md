@@ -53,20 +53,28 @@ werewolf-llm/
 
 ## Development Environment
 
-This project is configured to run in a VS Code Dev Container, which provides a reproducible development environment. By default, it is set up for CPU-only. To configure it for your specific GPU architecture, you'll need to edit `.devcontainer/devcontainer.json`.
+This project is configured to run in a VS Code Dev Container, which provides a reproducible development environment. You can configure it to run on CPU, NVIDIA (CUDA), or AMD (ROCm) hardware.
 
-In `.devcontainer/devcontainer.json`, add the appropriate Docker Compose file to the `dockerComposeFile` array:
-- For **NVIDIA (CUDA)**, add `"docker-compose.cuda.yml"`.
-- For **AMD (ROCm)**, add `"docker-compose.rocm.yml"`.
+### Backend Configuration
 
-For example, to use CUDA, your configuration should look like this:
-```json
-"dockerComposeFile": [ "docker-compose.base.yml", "docker-compose.cuda.yml" ],
-```
+To select the compute backend for your hardware:
+
+1.  **Copy the environment configuration file:**
+    ```bash
+    cp .devcontainer/.env.example .devcontainer/.env
+    ```
+
+2.  **Set the `BACKEND` variable** in `.devcontainer/.env`:
+    -   `BACKEND=cpu` (Default)
+    -   `BACKEND=cuda` (for NVIDIA GPUs)
+    -   `BACKEND=rocm` (for AMD GPUs)
+
+If the `.env` file is not present, the environment will default to `cpu`. The dev container will automatically use the correct configuration when it is built.
 
 ### Prerequisites
 
 -   [Docker](https://docs.docker.com/get-docker/)
+-   [Docker Compose](https://docs.docker.com/compose/install/)
 -   [VS Code](https://code.visualstudio.com/)
 -   [Dev Containers extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers) for VS Code.
 

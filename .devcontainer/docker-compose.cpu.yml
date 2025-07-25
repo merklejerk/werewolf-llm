@@ -8,6 +8,7 @@ services:
     environment:
       - HF_HOME=/home/user/.cache/huggingface
       - UV_LINK_MODE=copy
+      - BACKEND=cpu
     volumes:
       - ../:/workspace
       - ${HOME}/.cache/huggingface:/home/user/.cache/huggingface

@@ -1,6 +1,6 @@
 data/
 **/__pycache__
-.venv
-.env
+/.venv
+/.env
 **.egg-info
 checkpoints/
