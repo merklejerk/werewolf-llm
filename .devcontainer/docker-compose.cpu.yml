@@ -4,10 +4,10 @@ services:
       context: .
       dockerfile: "Dockerfile.vllm"
       args:
-        BASE_IMAGE: "public.ecr.aws/q9t5s3a7/vllm-cpu-release-repo:v0.9.2"
+        BASE_IMAGE: "public.ecr.aws/q9t5s3a7/vllm-cpu-release-repo:latest"
     environment:
       - HF_HOME=/home/user/.cache/huggingface
-      - UV_LINK_MODE=copy
+      - UV_LINK_MODE=symlink
       - BACKEND=cpu
     volumes:
       - ../:/workspace

@@ -19,6 +19,22 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/werewolf_llm"]
 
+[[tool.uv.index]]
+name = "pypi"
+url = "https://pypi.python.org/simple"
+
+[tool.uv.sources]
+markupsafe = { index = "pypi" }
+
+[tool.uv]
+override-dependencies = [
+    "torch; sys_platform == 'never'",
+    "torchaudio; sys_platform == 'never'",
+    "torchvision; sys_platform == 'never'",
+    "triton; sys_platform == 'never'",
+    "vllm; sys_platform == 'never'",
+]
+
 [dependency-groups]
 training = [
     "accelerate>=1.9.0",
@@ -31,4 +47,6 @@ training = [
     "scikit-learn>=1.6.1",
     "tqdm>=4.67.1",
     "transformers>=4.53.2",
+    "trl>=0.9.4",
+    "pydantic>=2.11.7",
 ]

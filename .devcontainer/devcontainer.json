@@ -5,11 +5,13 @@
     "workspaceFolder": "/workspace",
     "updateRemoteUserUID": true,
     "remoteUser": "user",
-    "initializeCommand": [ "/bin/sh", "-c", "cd .devcontainer && ([ -f .env ] && . .env; ln -srf \"docker-compose.${BACKEND:-cpu}.yml\" \".docker-compose.yml\")" ],
+    "initializeCommand": [ "/bin/bash", "-c", "cd .devcontainer && ([ -f .env ] && . .env; ln -srf \"docker-compose.${BACKEND:-cpu}.yml\" \".docker-compose.yml\")" ],
+    "postCreateCommand": [ "/bin/bash", ".devcontainer/post-create.sh" ],
     "customizations": {
         "vscode": {
             "settings": {
-                "python.defaultInterpreterPath": "${containerWorkspaceFolder}/.venv/bin/python"
+                "python.defaultInterpreterPath": "${containerWorkspaceFolder}/.venv/bin/python",
+                "python.envFile": "${workspaceFolder}/.devcontainer/.pylance.env"
             }
         }
     }
