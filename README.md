@@ -111,7 +111,7 @@ Generate a dataset for the supervised fine-tuning phase. The script runs multipl
 
 ```bash
 # Generate 1000 games and save to ./data/sft
-uv run gen-sft --num-games 1000 ./data/sft
+uv run gen-sft -n 1000 ./data/sft
 ```
 
 ### 2. Train the Model
@@ -127,7 +127,7 @@ uv run train my-first-run \
   --sft ./data/sft/sft_dataset.jsonl
 ```
 
-The script will create a checkpoint directory at `training/my-first-run`.
+The script will create a checkpoint directory at `checkpoints/my-first-run`.
 
 **To resume a training run:**
 
