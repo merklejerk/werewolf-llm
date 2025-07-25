@@ -2173,7 +2173,6 @@ training = [
 requires-dist = [{ name = "pydantic", specifier = ">=2.11.7" }]
 
 [package.metadata.requires-dev]
-dev = []
 training = [
     { name = "accelerate", specifier = ">=1.9.0" },
     { name = "bitsandbytes", specifier = ">=0.46.1" },

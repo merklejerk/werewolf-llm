@@ -20,7 +20,6 @@ build-backend = "hatchling.build"
 packages = ["src/werewolf_llm"]
 
 [dependency-groups]
-dev = []
 training = [
     "accelerate>=1.9.0",
     "bitsandbytes>=0.46.1",

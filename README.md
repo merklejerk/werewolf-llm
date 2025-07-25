@@ -96,16 +96,11 @@ If the `.env` file is not present, the environment will default to `cpu`. The de
     # Create venv that can access system packages
     uv venv --system-site-packages
 
-    # Activate venv
-    source .venv/bin/activate
+    # Install base and training dependencies
+    uv sync --all-groups
 
-    # Install base and dev dependencies
-    uv pip install -e ".[dev]"
-    ```
-
-4.  **For model training, install the training dependencies:**
-    ```bash
-    uv pip install -e ".[training]"
+    # Install package in edit mode
+    uv pip install -e "."
     ```
 
 ## Usage
