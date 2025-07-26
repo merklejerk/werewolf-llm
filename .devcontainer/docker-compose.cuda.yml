@@ -6,6 +6,7 @@ services:
     build:
       args:
         BASE_IMAGE: "vllm/vllm-openai:latest"
+        BACKEND: "cuda"
     environment:
       - BACKEND=cuda
     devices:

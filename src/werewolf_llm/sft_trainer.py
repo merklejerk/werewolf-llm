@@ -4,10 +4,10 @@ using the Hugging Face TRL and PEFT libraries.
 """
 import logging
 from pathlib import Path
-from typing import Dict
+from typing import Dict, cast
 
 import torch
-from datasets import load_dataset
+from datasets import load_dataset, Dataset
 from peft import LoraConfig
 from transformers import (
     AutoModelForCausalLM,
@@ -72,7 +72,7 @@ class SFTTrainerWrapper:
 
         # 1. Load dataset
         logger.info(f"Loading dataset from {self.sft_data_path}")
-        dataset = load_dataset("json", data_files=str(self.sft_data_path), split="train")
+        dataset = cast(Dataset, load_dataset("json", data_files=str(self.sft_data_path), split="train"))
 
         # 2. Configure LoRA adapter
         logger.info("Configuring LoRA adapter...")

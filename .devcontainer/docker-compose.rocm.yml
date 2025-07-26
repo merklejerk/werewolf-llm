@@ -6,6 +6,7 @@ services:
     build:
       args:
         BASE_IMAGE: "rocm/vllm:latest"
+        BACKEND: "rocm" 
     environment:
       - BACKEND=rocm
     devices:

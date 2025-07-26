@@ -1,16 +1,10 @@
 ARG BASE_IMAGE
+
 FROM ${BASE_IMAGE}
 
 ARG USERNAME=user
 ARG USER_UID=1337
 ARG USER_GID=$USER_UID
-
-# Install any additional system dependencies if needed (e.g., git, curl)
-RUN apt-get update && apt-get install -y --no-install-recommends jq \
-    && rm -rf /var/lib/apt/lists/*
-
-RUN pip install uv
-
 ARG BACKEND=cpu
 
 # Create the user
@@ -20,6 +14,18 @@ RUN groupadd --gid $USER_GID $USERNAME \
     && cp /etc/skel/.profile /home/$USERNAME/ \
     && chown -R $USERNAME:$USERNAME /home/$USERNAME \
     && echo 'PS1="$(tput setaf 241)[$BACKEND] $(tput bold)$(tput setaf 169)\w$(tput sgr0)\$ "' >> /home/$USERNAME/.bashrc
+
+# Install any additional system dependencies if needed (e.g., git, curl)
+RUN apt-get update && apt-get install -y --no-install-recommends jq \
+    && rm -rf /var/lib/apt/lists/* \
+    && pip install uv
+
+WORKDIR /root
+RUN if [ $BACKEND = "rocm" ]; then \
+    git clone -b rocm_enabled_multi_backend https://github.com/ROCm/bitsandbytes.git && \
+    cd bitsandbytes/ && cmake -DGPU_TARGETS="gfx1100" -DBNB_ROCM_ARCH="gfx1100" -DCOMPUTE_BACKEND=hip -S . && make && pip install . && \
+    cd .. && rm -rf bitsandbytes; \
+    fi
 
 # Set the working directory
 WORKDIR /workspace

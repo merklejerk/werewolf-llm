@@ -6,7 +6,8 @@ from typing import Tuple, Optional
 
 import torch
 from pydantic import BaseModel
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoTokenizer, AutoModelForCausalLM, PreTrainedModel
+from transformers.tokenization_utils_base import PreTrainedTokenizerBase
 from transformers.utils.quantization_config import BitsAndBytesConfig
 
 from .sft_trainer import SFTTrainerWrapper
@@ -28,7 +29,7 @@ class TrainingManifest(BaseModel):
 
 def load_or_create_model(
     training_name: str, base_model_name: Optional[str]
-) -> Tuple[AutoModelForCausalLM, AutoTokenizer, Path]:
+) -> Tuple[PreTrainedModel, PreTrainedTokenizerBase, Path]:
     """
     Load a model from a training checkpoint, or create a new one from a base model.
     """
@@ -65,9 +66,8 @@ def load_or_create_model(
             base_model_name,
             quantization_config=bnb_config,
             device_map="auto",
-            max_seq_length=MAX_SEQ_LENGTH,
         )
-        tokenizer = AutoTokenizer.from_pretrained(base_model_name)
+        tokenizer = AutoTokenizer.from_pretrained(base_model_name, max_seq_length=MAX_SEQ_LENGTH)
         tokenizer.pad_token = tokenizer.eos_token
 
         logger.info(f"Saving initial checkpoint to {training_run_dir}")
@@ -82,7 +82,7 @@ def load_or_create_model(
     return model, tokenizer, training_run_dir
 
 
-def run_sft(model: AutoModelForCausalLM, tokenizer: AutoTokenizer, training_run_dir: Path, sft_data_path: Path):
+def run_sft(model: PreTrainedModel, tokenizer: PreTrainedTokenizerBase, training_run_dir: Path, sft_data_path: Path):
     """Runs the Supervised Fine-Tuning process."""
     sft_trainer = SFTTrainerWrapper(
         model=model,
@@ -94,7 +94,7 @@ def run_sft(model: AutoModelForCausalLM, tokenizer: AutoTokenizer, training_run_
 
 
 
-def run_rl(model: AutoModelForCausalLM, tokenizer: AutoTokenizer, training_run_dir: Path, rl_data_path: Path):
+def run_rl(model: PreTrainedModel, tokenizer: PreTrainedTokenizerBase, training_run_dir: Path, rl_data_path: Path):
     """Stub for the Reinforcement Learning process."""
     logger.info("--- Running Reinforcement Learning (RL) ---")
     logger.info(f"Loading RL configuration from: {rl_data_path}")
