@@ -18,27 +18,30 @@ from transformers import (
 from transformers.tokenization_utils_base import PreTrainedTokenizerBase
 from trl import SFTTrainer, SFTConfig
 
-from .config import Backend, get_backend
+from .config import Backend, get_backend, is_accelerated
 
 logger = logging.getLogger(__name__)
 
+# LoRA target modules to use (subset of commonly available modules)
+# Focus on attention layers as specified in the project spec
+LORA_TARGET_MODULES = ["q_proj", "v_proj", "k_proj", "o_proj"]
+
 
 def find_lora_target_modules(model) -> list[str]:
-    """Find all linear layers in the model to apply LoRA."""
-    target_modules = set()
+    """Find available linear layers in the model and return a subset for LoRA."""
+    available_modules = set()
     for name, module in model.named_modules():
         if isinstance(module, torch.nn.Linear) and "lm_head" not in name:
             # Split the name by dots and take the last part
             module_name = name.split('.')[-1]
-            target_modules.add(module_name)
+            available_modules.add(module_name)
     
-    # Prioritize common module names
-    priority_order = ["q_proj", "v_proj", "k_proj", "o_proj", "gate_proj", "up_proj", "down_proj"]
+    # Select only the modules from our predefined subset that are available
+    target_modules = [module for module in LORA_TARGET_MODULES if module in available_modules]
     
-    sorted_modules = sorted(list(target_modules), key=lambda x: priority_order.index(x) if x in priority_order else len(priority_order))
-    
-    logger.info(f"Found LoRA target modules: {sorted_modules}")
-    return sorted_modules
+    logger.info(f"Available modules: {sorted(available_modules)}")
+    logger.info(f"Selected LoRA target modules: {target_modules}")
+    return target_modules
 
 
 class SFTTrainerWrapper:
@@ -59,11 +62,6 @@ class SFTTrainerWrapper:
         self.sft_data_path = sft_data_path
         self.output_dir = self.training_run_dir
 
-    def _format_dataset_entry(self, entry: Dict) -> str:
-        """Format a dataset entry into a single string for training."""
-        # The model should learn to generate the completion given the prompt
-        return f"{entry['prompt']}\n\n{entry['completion']}"
-
     def train(self):
         """
         Executes the SFT process.
@@ -77,10 +75,10 @@ class SFTTrainerWrapper:
         # 2. Configure LoRA adapter
         logger.info("Configuring LoRA adapter...")
         lora_config = LoraConfig(
-            r=16,
-            lora_alpha=32,
+            r=8,
+            lora_alpha=16,
             target_modules=find_lora_target_modules(self.model),
-            lora_dropout=0.05,
+            lora_dropout=0.01,
             bias="none",
             task_type="CAUSAL_LM",
         )
@@ -97,11 +95,15 @@ class SFTTrainerWrapper:
             per_device_train_batch_size=per_device_train_batch_size,
             gradient_accumulation_steps=gradient_accumulation_steps,
             learning_rate=2e-4,
-            logging_steps=10,
+            logging_steps=1,
             save_strategy="epoch",
-            optim="paged_adamw_8bit" if backend == Backend.CUDA else "adamw_torch",
-            fp16=backend == Backend.CUDA,  # Enable fp16 only for CUDA
-            packing=True,
+            optim="paged_adamw_8bit" if is_accelerated(backend) else "adamw_torch",
+            bf16=is_accelerated(backend),
+            completion_only_loss=True,
+            packing=False,  # Disable packing to avoid cross-contamination without flash attention
+            logging_first_step=True,
+            max_seq_length=2048,
+            dataloader_num_workers=0,
         )
 
         logger.info("Initializing SFTTrainer...")
@@ -110,7 +112,6 @@ class SFTTrainerWrapper:
             args=training_args,
             peft_config=lora_config,
             train_dataset=dataset,
-            formatting_func=self._format_dataset_entry,
             processing_class=self.tokenizer,
         )
 

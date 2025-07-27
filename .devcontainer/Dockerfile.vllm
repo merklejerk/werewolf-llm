@@ -25,6 +25,8 @@ RUN if [ $BACKEND = "rocm" ]; then \
     git clone -b rocm_enabled_multi_backend https://github.com/ROCm/bitsandbytes.git && \
     cd bitsandbytes/ && cmake -DGPU_TARGETS="gfx1100" -DBNB_ROCM_ARCH="gfx1100" -DCOMPUTE_BACKEND=hip -S . && make && pip install . && \
     cd .. && rm -rf bitsandbytes; \
+    else \
+    pip install bitsandbytes==0.46.1; \
     fi
 
 # Set the working directory

@@ -31,3 +31,10 @@ def get_backend() -> Backend:
             f"Valid options are: {[b.value for b in Backend]}"
         )
         return Backend.CPU
+
+
+def is_accelerated(backend: Backend) -> bool:
+    """
+    Returns True if the backend supports GPU acceleration (CUDA/ROCm features).
+    """
+    return backend in (Backend.CUDA, Backend.ROCM)

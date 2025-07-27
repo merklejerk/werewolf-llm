@@ -33,12 +33,12 @@ override-dependencies = [
     "torchvision; sys_platform == 'never'",
     "triton; sys_platform == 'never'",
     "vllm; sys_platform == 'never'",
+    "bitsandbytes; sys_platform == 'never'",
 ]
 
 [dependency-groups]
 training = [
     "accelerate>=1.9.0",
-    "bitsandbytes>=0.46.1",
     "datasets>=4.0.0",
     "evaluate>=0.4.5",
     "numpy>=2.0.2",

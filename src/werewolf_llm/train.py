@@ -2,7 +2,7 @@ import argparse
 import logging
 from pathlib import Path
 import sys
-from typing import Tuple, Optional
+from typing import Tuple, Optional, Dict, Any
 
 import torch
 from pydantic import BaseModel
@@ -11,6 +11,7 @@ from transformers.tokenization_utils_base import PreTrainedTokenizerBase
 from transformers.utils.quantization_config import BitsAndBytesConfig
 
 from .sft_trainer import SFTTrainerWrapper
+from .config import Backend, get_backend, is_accelerated
 
 
 logging.basicConfig(level=logging.INFO)
@@ -34,21 +35,39 @@ def load_or_create_model(
     Load a model from a training checkpoint, or create a new one from a base model.
     """
     training_run_dir = CHECKPOINTS_DIR / training_name
+    config_path = training_run_dir / "config.json"
     
     # Configure quantization for memory efficiency
-    bnb_config = BitsAndBytesConfig(
-        load_in_4bit=True,
-        bnb_4bit_quant_type="nf4",
-        bnb_4bit_compute_dtype=torch.bfloat16,
-    )
+    backend = get_backend()
+    if is_accelerated(backend):
+        # Use bfloat16 for GPU backends (CUDA/ROCm)
+        bnb_config = BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_quant_type="nf4",
+            bnb_4bit_compute_dtype=torch.bfloat16,
+        )
+        logger.info(f"Using 4-bit quantization with bfloat16 for {backend.value} backend")
+    else:
+        # Use float32 for CPU backend
+        bnb_config = BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_quant_type="nf4",
+            bnb_4bit_compute_dtype=torch.float16,
+        )
+        logger.info(f"Using 4-bit quantization with float16 for {backend.value} backend")
+        bnb_config = None # Stalls with valid bnb config on CPU backend?
 
-    if training_run_dir.exists():
+    if training_run_dir.exists() and config_path.exists():
         logger.info(f"Loading existing model from checkpoint: {training_run_dir}")
+        model_kwargs: Dict[str, Any] = {
+            "device_map": "auto",
+        }
+        if bnb_config is not None:
+            model_kwargs["quantization_config"] = bnb_config
+            
         model = AutoModelForCausalLM.from_pretrained(
             training_run_dir,
-            quantization_config=bnb_config,
-            device_map="auto",
-            max_seq_length=MAX_SEQ_LENGTH,
+            **model_kwargs
         )
         tokenizer = AutoTokenizer.from_pretrained(training_run_dir)
     else:
@@ -62,10 +81,15 @@ def load_or_create_model(
         logger.info(f"Creating new training run '{training_name}' from base model '{base_model_name}'")
         training_run_dir.mkdir(parents=True, exist_ok=True)
 
+        model_kwargs: Dict[str, Any] = {
+            "device_map": "auto",
+        }
+        if bnb_config is not None:
+            model_kwargs["quantization_config"] = bnb_config
+
         model = AutoModelForCausalLM.from_pretrained(
             base_model_name,
-            quantization_config=bnb_config,
-            device_map="auto",
+            **model_kwargs
         )
         tokenizer = AutoTokenizer.from_pretrained(base_model_name, max_seq_length=MAX_SEQ_LENGTH)
         tokenizer.pad_token = tokenizer.eos_token
