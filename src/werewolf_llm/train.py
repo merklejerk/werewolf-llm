@@ -3,6 +3,10 @@ import logging
 from pathlib import Path
 import sys
 from typing import Tuple, Optional, Dict, Any
+import asyncio
+import json
+
+from dataclasses import asdict
 
 import torch
 from pydantic import BaseModel
@@ -10,8 +14,11 @@ from transformers import AutoTokenizer, AutoModelForCausalLM, PreTrainedModel
 from transformers.tokenization_utils_base import PreTrainedTokenizerBase
 from transformers.utils.quantization_config import BitsAndBytesConfig
 
-from .sft_trainer import SFTTrainerWrapper
+from .sft_trainer import train_sft
+# from .ppo_trainer import PPOTrainerWrapper
+# from .vllm_agent import VLLMServer
 from .config import Backend, get_backend, is_accelerated
+from .generate_sft_data import generate_sft_dataset
 
 
 logging.basicConfig(level=logging.INFO)
@@ -57,13 +64,16 @@ def load_or_create_model(
         logger.info(f"Using 4-bit quantization with float16 for {backend.value} backend")
         bnb_config = None # Stalls with valid bnb config on CPU backend?
 
+
+    model_kwargs: Dict[str, Any] = {
+        "device_map": "auto",
+        "attn_implementation": "flash_attention_2" if is_accelerated(backend) else "eager",
+    }
+    if bnb_config is not None:
+        model_kwargs["quantization_config"] = bnb_config
+    
     if training_run_dir.exists() and config_path.exists():
         logger.info(f"Loading existing model from checkpoint: {training_run_dir}")
-        model_kwargs: Dict[str, Any] = {
-            "device_map": "auto",
-        }
-        if bnb_config is not None:
-            model_kwargs["quantization_config"] = bnb_config
             
         model = AutoModelForCausalLM.from_pretrained(
             training_run_dir,
@@ -80,12 +90,6 @@ def load_or_create_model(
             
         logger.info(f"Creating new training run '{training_name}' from base model '{base_model_name}'")
         training_run_dir.mkdir(parents=True, exist_ok=True)
-
-        model_kwargs: Dict[str, Any] = {
-            "device_map": "auto",
-        }
-        if bnb_config is not None:
-            model_kwargs["quantization_config"] = bnb_config
 
         model = AutoModelForCausalLM.from_pretrained(
             base_model_name,
@@ -106,30 +110,74 @@ def load_or_create_model(
     return model, tokenizer, training_run_dir
 
 
-def run_sft(model: PreTrainedModel, tokenizer: PreTrainedTokenizerBase, training_run_dir: Path, sft_data_path: Path):
-    """Runs the Supervised Fine-Tuning process."""
-    sft_trainer = SFTTrainerWrapper(
+def run_sft(model: PreTrainedModel, tokenizer: PreTrainedTokenizerBase, training_run_dir: Path, dataset_count: int):
+    """Runs the Supervised Fine-Tuning process by generating data on the fly."""
+    def sft_dataset_generator():
+        # Generate SFT data synchronously and yield one data point at a time
+        for dp in generate_sft_dataset(dataset_count):
+            yield asdict(dp)
+
+    train_sft(
         model=model,
         tokenizer=tokenizer,
         training_run_dir=training_run_dir,
-        sft_data_path=sft_data_path,
+        dataset_generator=sft_dataset_generator,
     )
-    sft_trainer.train()
 
 
-
-def run_rl(model: PreTrainedModel, tokenizer: PreTrainedTokenizerBase, training_run_dir: Path, rl_data_path: Path):
-    """Stub for the Reinforcement Learning process."""
-    logger.info("--- Running Reinforcement Learning (RL) ---")
-    logger.info(f"Loading RL configuration from: {rl_data_path}")
-    # TODO: Implement RL
-    # 1. Load SFT adapter from path provided in args
-    # 2. Set up game environment/simulator
-    # 3. Configure PPO trainer
-    # 4. Run self-play training loop
-    # 5. Save final adapter to training_run_dir
-    logger.info("RL logic will be implemented here.")
-    logger.info(f"Model and tokenizer are loaded. Checkpoint is at {training_run_dir}")
+def run_rl(model: PreTrainedModel, tokenizer: PreTrainedTokenizerBase, training_run_dir: Path, rl_config_path: Path):
+    raise NotImplementedError("Reinforcement Learning (RL) training is not yet implemented.")
+    # """Runs the Reinforcement Learning (PPO) process."""
+    # logger.info("--- Running Reinforcement Learning (RL) ---")
+    # logger.info(f"Loading RL configuration from: {rl_config_path}")
+    
+    # # Load RL configuration
+    # try:
+    #     with open(rl_config_path) as f:
+    #         rl_config = json.load(f)
+    # except Exception as e:
+    #     logger.error(f"Failed to load RL config: {e}")
+    #     sys.exit(1)
+    
+    # # Extract configuration parameters
+    # vllm_model_path = rl_config.get("vllm_model_path", str(training_run_dir))
+    # games_per_batch = rl_config.get("games_per_batch", 8)
+    # max_rounds = rl_config.get("max_rounds", 3)
+    # num_rollouts = rl_config.get("num_rollouts", 1000)
+    # sync_frequency = rl_config.get("sync_frequency", 100)
+    # vllm_port = rl_config.get("vllm_port", 8000)
+    
+    # async def run_rl_training():
+    #     # Start VLLM server
+    #     vllm_server = VLLMServer(
+    #         model_path=vllm_model_path,
+    #         port=vllm_port,
+    #     )
+        
+    #     try:
+    #         logger.info("Starting VLLM server...")
+    #         await vllm_server.start()
+            
+    #         # Initialize PPO trainer
+    #         ppo_trainer = PPOTrainerWrapper(
+    #             model=model,
+    #             tokenizer=tokenizer,
+    #             training_run_dir=training_run_dir,
+    #             vllm_model_path=vllm_model_path,
+    #             games_per_batch=games_per_batch,
+    #             max_rounds=max_rounds,
+    #             sync_frequency=sync_frequency,
+    #         )
+            
+    #         # Run training
+    #         await ppo_trainer.train(num_rollouts=num_rollouts)
+            
+    #     finally:
+    #         # Clean up VLLM server
+    #         vllm_server.stop()
+    
+    # # Run the async training loop
+    # asyncio.run(run_rl_training())
 
 
 def main():
@@ -140,10 +188,10 @@ def main():
     parser.add_argument("-b", "--base", type=str, dest="base_model_name",
                         help="The Hugging Face model ID to use as a base (required for new runs).")
     
-    # Mutually exclusive group for training mode based on data
+    # Mutually exclusive group for training mode
     mode_group = parser.add_mutually_exclusive_group(required=True)
-    mode_group.add_argument("--sft", type=Path,
-                            help="Path to the SFT dataset file. Triggers SFT mode.")
+    mode_group.add_argument("--sft", type=int,
+                            help="Size of dataset to generate. Triggers SFT mode.")
     mode_group.add_argument("--rl", type=Path,
                             help="Path to the RL configuration file. Triggers RL mode.")
 
@@ -161,7 +209,7 @@ def main():
         sys.exit(1)
         
     # Execute the selected training mode
-    if args.sft:
+    if args.sft is not None:
         run_sft(model, tokenizer, training_run_dir, args.sft)
     elif args.rl:
         run_rl(model, tokenizer, training_run_dir, args.rl)

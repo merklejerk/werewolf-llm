@@ -27,6 +27,8 @@ logger = logging.getLogger(__name__)
 LORA_TARGET_MODULES = ["q_proj", "v_proj", "k_proj", "o_proj"]
 
 
+
+
 def find_lora_target_modules(model) -> list[str]:
     """Find available linear layers in the model and return a subset for LoRA."""
     available_modules = set()
@@ -44,83 +46,85 @@ def find_lora_target_modules(model) -> list[str]:
     return target_modules
 
 
-class SFTTrainerWrapper:
+def format_dataset(dataset: Dataset, tokenizer: PreTrainedTokenizerBase) -> Dataset:
     """
-    A wrapper class to manage the SFT process.
+    Formats the dataset by applying the chat template to the 'messages' column.
     """
+    def apply_template(example):
+        return {"text": tokenizer.apply_chat_template(example["messages"], tokenize=False)}
 
-    def __init__(
-        self,
-        model: PreTrainedModel,
-        tokenizer: PreTrainedTokenizerBase,
-        training_run_dir: Path,
-        sft_data_path: Path,
-    ):
-        self.model = model
-        self.tokenizer = tokenizer
-        self.training_run_dir = training_run_dir
-        self.sft_data_path = sft_data_path
-        self.output_dir = self.training_run_dir
+    return dataset.map(apply_template, remove_columns=list(dataset.features))
 
-    def train(self):
-        """
-        Executes the SFT process.
-        """
-        logger.info("--- Starting SFT ---")
 
-        # 1. Load dataset
-        logger.info(f"Loading dataset from {self.sft_data_path}")
-        dataset = cast(Dataset, load_dataset("json", data_files=str(self.sft_data_path), split="train"))
+def train_sft(
+    model: PreTrainedModel,
+    tokenizer: PreTrainedTokenizerBase,
+    training_run_dir: Path,
+    dataset_generator,
+):
+    """
+    Executes the SFT process using a dataset generator.
+    """
+    logger.info("--- Starting SFT ---")
 
-        # 2. Configure LoRA adapter
-        logger.info("Configuring LoRA adapter...")
-        lora_config = LoraConfig(
-            r=8,
-            lora_alpha=16,
-            target_modules=find_lora_target_modules(self.model),
-            lora_dropout=0.01,
-            bias="none",
-            task_type="CAUSAL_LM",
-        )
+    # 1. Create Hugging Face Dataset from the generator
+    logger.info("Creating dataset from generator...")
+    train_dataset = Dataset.from_generator(dataset_generator)
+    # Ensure correct Dataset type for further processing
+    train_dataset = cast(Dataset, train_dataset)
+    logger.info("Dataset created from generator.")
 
-        # 3. Set up SFTTrainer
-        # Use a smaller batch size if on CPU
-        backend = get_backend()
-        per_device_train_batch_size = 1 if backend == Backend.CPU else 4
-        gradient_accumulation_steps = 4 if backend == Backend.CPU else 1
+    # 2. Format dataset
+    formatted_dataset = format_dataset(train_dataset, tokenizer)
+    logger.info("Dataset formatted for training.")
 
-        training_args = SFTConfig(
-            output_dir=str(self.output_dir),
-            num_train_epochs=3,
-            per_device_train_batch_size=per_device_train_batch_size,
-            gradient_accumulation_steps=gradient_accumulation_steps,
-            learning_rate=2e-4,
-            logging_steps=1,
-            save_strategy="epoch",
-            optim="paged_adamw_8bit" if is_accelerated(backend) else "adamw_torch",
-            bf16=is_accelerated(backend),
-            completion_only_loss=True,
-            packing=False,  # Disable packing to avoid cross-contamination without flash attention
-            logging_first_step=True,
-            max_seq_length=2048,
-            dataloader_num_workers=0,
-        )
+    # 3. Configure LoRA adapter
+    logger.info("Configuring LoRA adapter...")
+    lora_config = LoraConfig(
+        r=8,
+        lora_alpha=16,
+        target_modules=find_lora_target_modules(model),
+        lora_dropout=0.01,
+        bias="none",
+        task_type="CAUSAL_LM",
+    )
 
-        logger.info("Initializing SFTTrainer...")
-        trainer = SFTTrainer(
-            model=self.model,
-            args=training_args,
-            peft_config=lora_config,
-            train_dataset=dataset,
-            processing_class=self.tokenizer,
-        )
+    # 4. Set up SFTTrainer
+    backend = get_backend()
+    per_device_train_batch_size = 1 if backend == Backend.CPU else 4
+    gradient_accumulation_steps = 4 if backend == Backend.CPU else 1
 
-        # 4. Run training
-        logger.info("Starting training...")
-        trainer.train()
-        logger.info("Training finished.")
+    training_args = SFTConfig(
+        output_dir=str(training_run_dir),
+        num_train_epochs=3,
+        per_device_train_batch_size=per_device_train_batch_size,
+        gradient_accumulation_steps=gradient_accumulation_steps,
+        learning_rate=2e-4,
+        logging_steps=1,
+        save_strategy="epoch",
+        optim="paged_adamw_8bit" if is_accelerated(backend) else "adamw_torch",
+        bf16=is_accelerated(backend),
+        packing=True,
+        logging_first_step=True,
+        max_seq_length=2048,
+        dataloader_num_workers=0,
+        dataset_num_proc=4,
+    )
 
-        # 5. Save adapter
-        logger.info(f"Saving LoRA adapter to {self.output_dir}")
-        trainer.save_model(str(self.output_dir))
-        logger.info("SFT process completed successfully.")
+    logger.info("Initializing SFTTrainer...")
+    trainer = SFTTrainer(
+        model=model,
+        args=training_args,
+        peft_config=lora_config,
+        train_dataset=formatted_dataset,
+    )
+
+    # 5. Run training
+    logger.info("Starting training...")
+    trainer.train()
+    logger.info("Training finished.")
+
+    # 6. Save adapter
+    logger.info(f"Saving LoRA adapter to {training_run_dir}")
+    trainer.save_model(str(training_run_dir))
+    logger.info("SFT process completed successfully.")

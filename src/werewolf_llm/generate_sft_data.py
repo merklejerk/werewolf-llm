@@ -3,14 +3,12 @@ import json
 import logging
 import random
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Dict, List, Optional, Tuple, Any, Union, Iterator
 from dataclasses import dataclass, asdict
-import sys
-import asyncio
 
 from .game_simulator import GameSimulator, DiscussionTurn
 from .roles import Role
-from .agent import Agent, TurnOutput
+from .agent import TurnOutput
 
 
 logging.basicConfig(level=logging.INFO)
@@ -18,25 +16,24 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
-class SFTDataPoint:
-    """Represents a single training example for SFT."""
-    prompt: str
-    completion: str
+class SFTConversation:
+    """Represents a single training example for SFT in conversational format."""
+    messages: List[Dict[str, str]]
     metadata: Dict[str, Any]
 
 
-class RuleBasedAgent(Agent):
+class RuleBasedAgent:
     """Enhanced rule-based agent for generating high-quality SFT data."""
     
     def __init__(self, player_name: str, strategy_variant: str = "standard"):
-        super().__init__(player_name)
+        self.player_name = player_name
         self.strategy_variant = strategy_variant
         
-    async def generate_turn_output(self, game: GameSimulator) -> TurnOutput:
+    def generate_turn_output(self, game: GameSimulator) -> TurnOutput:
         """Generates a complete, structured output for the agent's turn."""
-        public_statement = await self._get_public_statement(game)
-        private_guesses = await self._get_private_guesses(game)
-        vote = await self._get_vote(game)
+        public_statement = self._get_public_statement(game)
+        private_guesses = self._get_private_guesses(game)
+        vote = self._get_vote(game)
 
         return TurnOutput(
             publicStatement=public_statement,
@@ -44,7 +41,7 @@ class RuleBasedAgent(Agent):
             vote=vote,
         )
 
-    async def _get_public_statement(self, game: GameSimulator) -> str:
+    def _get_public_statement(self, game: GameSimulator) -> str:
         """Generate role-appropriate public statements with strategy variants."""
         my_initial_role = game.get_player_initial_role(self.player_name)
         observation = game.get_player_night_observation(self.player_name)
@@ -127,7 +124,7 @@ class RuleBasedAgent(Agent):
         ]
         return random.choice(statements)
     
-    async def _get_vote(self, game: GameSimulator) -> str:
+    def _get_vote(self, game: GameSimulator) -> str:
         """Strategic voting based on role and discussion."""
         my_initial_role = game.get_player_initial_role(self.player_name)
         all_players = game.get_all_players()
@@ -151,7 +148,7 @@ class RuleBasedAgent(Agent):
         # Default: vote for a random other player
         return random.choice(other_players)
     
-    async def _get_private_guesses(self, game: GameSimulator) -> Dict[str, str]:
+    def _get_private_guesses(self, game: GameSimulator) -> Dict[str, str]:
         """Generate strategic private role guesses."""
         my_initial_role = game.get_player_initial_role(self.player_name)
         observation = game.get_player_night_observation(self.player_name)
@@ -294,242 +291,191 @@ class RuleBasedAgent(Agent):
         return observation
 
 
-class SFTDataGenerator:
-    """Main class for generating SFT training data."""
+def _generate_game_configs(num_games: int) -> List[Tuple[List[str], List[Role]]]:
+    """Generate diverse game configurations."""
+    configs = []
     
-    def __init__(self):
-        pass
+    # Define some standard configurations
+    base_configs = [
+        # 3 players + 3 center = 6 roles total
+        (["Alice", "Bob", "Charlie"], 
+         [Role.VILLAGER, Role.WEREWOLF, Role.SEER, Role.VILLAGER, Role.ROBBER, Role.TROUBLEMAKER]),
+        
+        # 4 players + 3 center = 7 roles total  
+        (["Alice", "Bob", "Charlie", "Diana"],
+         [Role.VILLAGER, Role.WEREWOLF, Role.SEER, Role.VILLAGER, Role.ROBBER, Role.TROUBLEMAKER, Role.TANNER]),
+        
+        # 5 players + 3 center = 8 roles total
+        (["Alice", "Bob", "Charlie", "Diana", "Eve"],
+         [Role.VILLAGER, Role.WEREWOLF, Role.WEREWOLF, Role.SEER, Role.VILLAGER, Role.ROBBER, Role.TROUBLEMAKER, Role.TANNER]),
+        
+        # 6 players + 3 center = 9 roles total
+        (["Alice", "Bob", "Charlie", "Diana", "Eve", "Frank"],
+         [Role.VILLAGER, Role.VILLAGER, Role.VILLAGER, Role.WEREWOLF, Role.WEREWOLF, Role.SEER, Role.ROBBER, Role.TROUBLEMAKER, Role.TANNER]),
+    ]
     
-    def generate_game_configs(self, num_games: int) -> List[Tuple[List[str], List[Role]]]:
-        """Generate diverse game configurations."""
-        configs = []
-        
-        # Define some standard configurations
-        base_configs = [
-            # 3 players + 3 center = 6 roles total
-            (["Alice", "Bob", "Charlie"], 
-             [Role.VILLAGER, Role.WEREWOLF, Role.SEER, Role.VILLAGER, Role.ROBBER, Role.TROUBLEMAKER]),
-            
-            # 4 players + 3 center = 7 roles total  
-            (["Alice", "Bob", "Charlie", "Diana"],
-             [Role.VILLAGER, Role.WEREWOLF, Role.SEER, Role.VILLAGER, Role.ROBBER, Role.TROUBLEMAKER, Role.TANNER]),
-            
-            # 5 players + 3 center = 8 roles total
-            (["Alice", "Bob", "Charlie", "Diana", "Eve"],
-             [Role.VILLAGER, Role.WEREWOLF, Role.WEREWOLF, Role.SEER, Role.VILLAGER, Role.ROBBER, Role.TROUBLEMAKER, Role.TANNER]),
-            
-            # 6 players + 3 center = 9 roles total
-            (["Alice", "Bob", "Charlie", "Diana", "Eve", "Frank"],
-             [Role.VILLAGER, Role.VILLAGER, Role.VILLAGER, Role.WEREWOLF, Role.WEREWOLF, Role.SEER, Role.ROBBER, Role.TROUBLEMAKER, Role.TANNER]),
-        ]
-        
-        for _ in range(num_games):
-            config = random.choice(base_configs)
-            configs.append(config)
-        
-        return configs
+    for _ in range(num_games):
+        config = random.choice(base_configs)
+        configs.append(config)
     
-    async def simulate_game_for_sft(self, players: List[str], roles: List[Role]) -> List[SFTDataPoint]:
-        """Simulate a single game and extract SFT training examples."""
-        game = GameSimulator(players, roles)
-        game.run_game()
-        
-        # Create rule-based agents with different strategy variants
-        strategy_variants = ["standard", "aggressive", "truthful", "secretive"]
-        agents = {}
-        for player in players:
-            variant = random.choice(strategy_variants)
-            agents[player] = RuleBasedAgent(player, variant)
-        
-        data_points = []
-        
-        # Simulate discussion phase (1-2 rounds)
-        num_rounds = random.randint(1, 2)
-        
-        for round_num in range(num_rounds):
-            round_players = players.copy()
-            random.shuffle(round_players)
-            for player in round_players:
-                # Generate prompt for this player's turn
-                prompt = self._generate_prompt(game, player)
-                
-                # Generate response using rule-based agent
-                agent = agents[player]
-                turn_output = await agent.generate_turn_output(game)
-                
-                completion_json = turn_output.to_json()
+    return configs
 
-                # Create data point
-                is_voting_phase = (round_num == num_rounds - 1)
-                metadata = {
-                    "player": player,
-                    "round": round_num,
-                    "initial_role": game.get_player_initial_role(player).value,
-                    "final_role": game.get_player_final_role(player).value,
-                    "night_observation": game.get_player_night_observation(player),
-                    "is_final_round": is_voting_phase,
-                    "strategy_variant": agent.strategy_variant,
-                }
-                
-                data_point = SFTDataPoint(
-                    prompt=prompt,
-                    completion=completion_json,
-                    metadata=metadata
-                )
-                data_points.append(data_point)
-                
-                # Add the statement to the game transcript for subsequent players
-                game.add_to_discussion_transcript(player, turn_output.public_statement)
-        
-        return data_points
-    
-    def _generate_prompt(self, game: GameSimulator, player: str) -> str:
-        """Generate the input prompt for a player's turn."""
-        
-        # System instruction
-        system_instruction = (
-            "You are playing One Night Ultimate Werewolf. Your objective is to secure victory for your team. "
-            "Formulate strategic statements, guesses, and votes."
-        )
-        
-        # Game state
-        all_players = game.get_all_players()
-        possible_roles = [role.value for role in game.get_all_roles_in_play()]
-        center_cards = game.get_center_card_names()
-        
-        game_state = f"""Players: {', '.join(all_players)}
-Possible Roles in Play: {', '.join(possible_roles)}
-Center Cards: {', '.join(center_cards)} (hidden from players)"""
-        
-        # Player's role and observations
-        initial_role = game.get_player_initial_role(player)
-        night_observation = game.get_player_night_observation(player)
-        
-        player_id_info = player
-        role_info = f"You are the {initial_role.value}."
-        observation_info = f"{night_observation}" if night_observation else "You have no special night observations."
-        
-        # Discussion transcript
-        transcript_lines = []
-        for turn in game.discussion_transcript:
-            transcript_lines.append(f'{turn.player}: "{turn.statement}"')
-        
-        transcript_section = "\n".join(transcript_lines) if transcript_lines else "(No statements yet)"
-        
-        # Combine all parts
-        prompt = f"""[SYSTEM_INSTRUCTION] {system_instruction}
 
-[GAME_STATE]
+def _simulate_game_for_sft(players: List[str], roles: List[Role]) -> List[SFTConversation]:
+    """Simulate a single game and extract SFT training examples."""
+    game = GameSimulator(players, roles)
+    game.run_game()
+    
+    # Create rule-based agents with different strategy variants
+    strategy_variants = ["standard", "aggressive", "truthful", "secretive"]
+    agents = {}
+    for player in players:
+        variant = random.choice(strategy_variants)
+        agents[player] = RuleBasedAgent(player, variant)
+    
+    data_points = []
+    
+    # Simulate discussion phase (1-2 rounds)
+    num_rounds = random.randint(1, 2)
+    
+    for round_num in range(num_rounds):
+        round_players = players.copy()
+        random.shuffle(round_players)
+        for player in round_players:
+            # Generate prompt for this player's turn
+            system_prompt, user_prompt = _generate_prompt_parts(game, player)
+            
+            # Generate response using rule-based agent
+            agent = agents[player]
+            turn_output = agent.generate_turn_output(game)
+            print(turn_output)
+            
+            completion_json = turn_output.to_json()
+
+            # Create data point
+            is_voting_phase = (round_num == num_rounds - 1)
+            metadata = {
+                "player": player,
+                "round": round_num,
+                "initial_role": game.get_player_initial_role(player).value,
+                "final_role": game.get_player_final_role(player).value,
+                "night_observation": game.get_player_night_observation(player),
+                "is_final_round": is_voting_phase,
+                "strategy_variant": agent.strategy_variant,
+            }
+            
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+                {"role": "assistant", "content": completion_json}
+            ]
+
+            data_point = SFTConversation(
+                messages=messages,
+                metadata=metadata
+            )
+            data_points.append(data_point)
+            
+            # Add the statement to the game transcript for subsequent players
+            game.add_discussion_turn(player, turn_output.public_statement)
+    
+    return data_points
+
+
+def _generate_prompt_parts(game: GameSimulator, player: str) -> Tuple[str, str]:
+    """Generate the system and user prompt parts for a player's turn."""
+    
+    # System instruction
+    system_instruction = (
+        "You are playing One Night Ultimate Werewolf. Your objective is to secure victory for your team. "
+        "Formulate strategic statements, guesses, and votes."
+    )
+    
+    # Game state
+    all_players = game.get_all_players()
+    possible_roles = [role.value for role in game.get_all_roles_in_play()]
+    center_cards = game.get_center_card_names()
+    
+    game_state = f"""<players>{', '.join(all_players)}</players>
+<possible-roles>{', '.join(possible_roles)}</possible-roles>
+<center-cards>{', '.join(center_cards)} (hidden from players)</center-cards>"""
+    
+    # Player's role and observations
+    initial_role = game.get_player_initial_role(player)
+    night_observation = game.get_player_night_observation(player)
+    
+    player_id_info = player
+    role_info = initial_role.value
+    observation_info = f"{night_observation}" if night_observation else "None."
+    
+    system_prompt = f"""<system-instruction>{system_instruction}</system-instruction>
+<game-state>
 {game_state}
+</game-state>
+<your-player-id>{player_id_info}</your-player-id>
+<your-initial-role>{role_info}</your-initial-role>
+<your-night-observations>{observation_info}</your-night-observations>"""
 
-[YOUR_PLAYER_ID] {player_id_info}
-
-[YOUR_INITIAL_ROLE] {role_info}
-[YOUR_NIGHT_OBSERVATIONS] {observation_info}
-
-[DISCUSSION_TRANSCRIPT]
-{transcript_section}"""
-        
-        return prompt
+    # Discussion transcript
+    transcript_lines = []
+    for turn in game.discussion_transcript:
+        transcript_lines.append(f'{turn.player}: "{turn.statement}"')
     
-    async def generate_sft_dataset(self, num_games: int) -> List[SFTDataPoint]:
-        """Generate a complete SFT dataset."""
-        logger.info(f"Generating SFT dataset with {num_games} games")
-        
-        configs = self.generate_game_configs(num_games)
-        all_data_points = []
-        
-        for i, (players, roles) in enumerate(configs):
-            if i % 100 == 0:
-                logger.info(f"Processed {i}/{num_games} games")
-            
-            try:
-                data_points = await self.simulate_game_for_sft(players, roles)
-                all_data_points.extend(data_points)
-            except Exception as e:
-                logger.error(f"Failed to simulate game {i}: {e}")
-                continue
-        
-        logger.info(f"Generated {len(all_data_points)} training examples")
-        return all_data_points
+    transcript_section = "\n".join(transcript_lines) if transcript_lines else ""
     
-    def save_dataset(self, data_points: List[SFTDataPoint], output_dir: Path):
-        """Save the dataset in multiple formats."""
-        output_dir.mkdir(parents=True, exist_ok=True)
-        
-        # Save as JSONL for easy loading
-        jsonl_path = output_dir / "sft_dataset.jsonl"
-        with open(jsonl_path, 'w') as f:
-            for dp in data_points:
-                json.dump(asdict(dp), f)
-                f.write('\n')
-        
-        # Save as separate prompt/completion files for some training frameworks
-        prompts_path = output_dir / "prompts.txt"
-        completions_path = output_dir / "completions.txt"
-        
-        with open(prompts_path, 'w') as pf, open(completions_path, 'w') as cf:
-            for dp in data_points:
-                pf.write(dp.prompt + '\n---\n')
-                cf.write(dp.completion + '\n---\n')
-        
-        # Save metadata summary
-        metadata_path = output_dir / "metadata.json"
-        metadata_summary = {
-            "total_examples": len(data_points),
-            "roles_distribution": {},
-            "strategy_variants": {},
-            "final_round_examples": 0,
-        }
-        
+    user_prompt = f"""<transcript>
+{transcript_section}
+</transcript>"""
+    
+    return system_prompt, user_prompt
+
+
+def generate_sft_dataset(total_items: int) -> Iterator[SFTConversation]:
+    """Generate a total of `total_items` SFT conversations as a generator."""
+    logger.info(f"Generating SFT dataset with {total_items} total items")
+    count = 0
+    # Generate games until we have yielded the desired number of items
+    while count < total_items:
+        # Generate one game configuration
+        players, roles = _generate_game_configs(1)[0]
+        game_data_points = _simulate_game_for_sft(players, roles)
+        for data_point in game_data_points:
+            yield data_point
+            count += 1
+            if count >= total_items:
+                logger.info(f"Generated {count}/{total_items} items, stopping.")
+                return
+
+
+def save_dataset(data_points: List[SFTConversation], output_dir: Path):
+    """Save the dataset in JSONL format."""
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Save as JSONL for easy loading
+    jsonl_path = output_dir / "sft_dataset.jsonl"
+    with open(jsonl_path, 'w') as f:
         for dp in data_points:
-            role = dp.metadata["final_role"]
-            variant = dp.metadata["strategy_variant"]
-            
-            metadata_summary["roles_distribution"][role] = metadata_summary["roles_distribution"].get(role, 0) + 1
-            metadata_summary["strategy_variants"][variant] = metadata_summary["strategy_variants"].get(variant, 0) + 1
-            
-            if dp.metadata["is_final_round"]:
-                metadata_summary["final_round_examples"] += 1
-        
-        with open(metadata_path, 'w') as f:
-            json.dump(metadata_summary, f, indent=2)
-        
-        logger.info(f"Dataset saved to {output_dir}")
-        logger.info(f"Files created: {jsonl_path}, {prompts_path}, {completions_path}, {metadata_path}")
+            f.write(json.dumps(asdict(dp)) + "\n")
+    
+    logger.info(f"Dataset saved to {jsonl_path}")
 
 
-async def main():
+def main():
+    """Main function to generate SFT data."""
     parser = argparse.ArgumentParser(description="Generate SFT training data for Werewolf LLM")
-    parser.add_argument("output_dir", type=str, help="Output directory for dataset")
+    parser.add_argument("output_file", type=str, help="Output file for dataset")
     parser.add_argument("-n", "--num_games", type=int, default=1000, help="Number of games to simulate")
     
     args = parser.parse_args()
     
-    # Create generator
-    generator = SFTDataGenerator()
+    logger.info(f"Starting SFT data generation for {args.num_games} games")
     
-    try:
-        # Generate dataset
-        data_points = await generator.generate_sft_dataset(args.num_games)
-        
-        # Save dataset
-        output_dir = Path(args.output_dir)
-        generator.save_dataset(data_points, output_dir)
-        
-        logger.info("SFT data generation completed successfully!")
-        
-    except KeyboardInterrupt:
-        logger.info("Generation interrupted by user")
-    except Exception as e:
-        logger.error(f"Generation failed: {e}")
-        sys.exit(1)
+    with open(args.output_file, "w") as f:
+        for dp in generate_sft_dataset(args.num_games):
+            f.write(json.dumps(dp) + "\n")
 
-
-def main_sync():
-    """Synchronous wrapper for the main function to work as a script entry point."""
-    asyncio.run(main())
+    logger.info(f"SFT data generation complete. Saved to {args.output_file}")
 
 
 if __name__ == "__main__":
-    main_sync()
+    main()

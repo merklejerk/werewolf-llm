@@ -220,3 +220,13 @@ class GameSimulator:
         if player not in self.players:
             raise ValueError(f"Invalid player name: {player}")
         self.discussion_transcript.append(DiscussionTurn(player=player, statement=statement))
+    
+    def add_discussion_turn(self, player: str, statement: str):
+        """Add a discussion turn (alias for add_to_discussion_transcript)."""
+        self.add_to_discussion_transcript(player, statement)
+    
+    def add_vote(self, player: str, voted_for: str):
+        """Add a vote from a player."""
+        if player not in self.players:
+            raise ValueError(f"Invalid player name: {player}")
+        self.votes[player] = voted_for

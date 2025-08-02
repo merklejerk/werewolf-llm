@@ -49,4 +49,7 @@ training = [
     "transformers>=4.53.2",
     "trl>=0.9.4",
     "pydantic>=2.11.7",
+    "torch>=2.0.0",
+    "vllm>=0.5.0",
+    "httpx>=0.25.0",
 ]

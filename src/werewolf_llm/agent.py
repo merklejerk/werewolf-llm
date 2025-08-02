@@ -17,14 +17,3 @@ class TurnOutput(BaseModel):
         """Serializes the object to a JSON string with camelCase field names."""
         return self.model_dump_json(by_alias=True, indent=2)
 
-class Agent(ABC):
-    def __init__(self, player_name: str):
-        self.player_name = player_name
-
-    @abstractmethod
-    async def generate_turn_output(self, game: GameSimulator) -> TurnOutput:
-        """
-        Generates a complete, structured output for the agent's turn.
-        This single method will produce the statement, guesses, and vote.
-        """
-        raise NotImplementedError
